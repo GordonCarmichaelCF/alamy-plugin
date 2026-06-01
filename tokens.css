@@ -1,0 +1,209 @@
+/* =============================================================
+   Alamy Plugin — Design Tokens
+   Light mode only. Two layers: primitives → semantic.
+   Source of truth: the Figma file "Alamy Prototyping".
+   ============================================================= */
+
+:root {
+  /* --------- Primitives: colour --------- */
+  --green-100: #E6FFF1;
+  --green-500: #00FF70;
+  --green-600: #00E063;
+
+  --black: #000000;
+  --white: #FFFFFF;
+
+  --grey-50:  #FAFAFA;
+  --grey-100: #F2F2F2;
+  --grey-200: #E5E5E5;
+  --grey-300: #CCCCCC;
+  --grey-500: #808080;
+  --grey-700: #4D4D4D;
+  --grey-900: #1A1A1A;
+  --grey-950: #0A0A0A;
+
+  --red-500:  #E5484D;
+
+  /* --------- Primitives: spacing (4px base) --------- */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* --------- Primitives: radii --------- */
+  --radius-none: 0;
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-pill: 9999px;
+
+  /* --------- Primitives: borders --------- */
+  --border-width-1: 1px;
+
+  /* --------- Primitives: typography --------- */
+  --font-display: "PP Formula Condensed", "Arial Narrow", sans-serif;
+  --font-ui:      "Noto Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --size-11: 11px;
+  --size-12: 12px;
+  --size-13: 13px;
+  --size-15: 15px;
+  --size-18: 18px;
+  --size-24: 24px;
+  --size-32: 32px;
+
+  --leading-tight:   1.2;
+  --leading-normal:  1.4;
+  --leading-relaxed: 1.5;
+
+  /* =============================================================
+     Semantic layer
+     ============================================================= */
+
+  /* Surfaces */
+  --color-bg:          var(--white);
+  --color-bg-subtle:   var(--grey-50);
+  --color-bg-hover:    var(--grey-100);
+  --color-bg-inverse:  var(--black);
+
+  /* Text */
+  --color-text:           var(--grey-900);
+  --color-text-secondary: var(--grey-700);
+  --color-text-tertiary:  var(--grey-500);
+  --color-text-inverse:   var(--white);
+  --color-text-on-action: var(--black);
+
+  /* Borders */
+  --color-border:        var(--grey-200);
+  --color-border-strong: var(--grey-300);
+  --color-border-focus:  var(--green-500);
+
+  /* Action (brand green) */
+  --color-action:        var(--green-500);
+  --color-action-hover:  var(--green-600);
+  --color-action-subtle: var(--green-100);
+
+  /* Status */
+  --color-danger: var(--red-500);
+
+  /* Spacing semantic aliases */
+  --space-inset-sm: var(--space-2);
+  --space-inset-md: var(--space-3);
+  --space-inset-lg: var(--space-4);
+  --space-stack-sm: var(--space-2);
+  --space-stack-md: var(--space-4);
+  --space-stack-lg: var(--space-6);
+}
+
+/* =============================================================
+   Type styles — class-based, mirror Figma text styles
+   ============================================================= */
+
+.text-display-xl {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--size-32);
+  line-height: 38px;
+}
+
+.text-display-lg {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--size-24);
+  line-height: 29px;
+}
+
+.text-heading {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: var(--size-18);
+  line-height: 24px;
+}
+
+.text-body {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--size-13);
+  line-height: 18px;
+}
+
+.text-body-strong {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: var(--size-13);
+  line-height: 18px;
+}
+
+.text-body-lg {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--size-15);
+  line-height: 21px;
+}
+
+.text-caption {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--size-12);
+  line-height: 17px;
+}
+
+.text-micro {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: var(--size-11);
+  line-height: 14px;
+  letter-spacing: 0.02em;
+}
+
+/* =============================================================
+   Base reset / defaults
+   ============================================================= */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--size-13);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+input {
+  font: inherit;
+  border: none;
+  background: none;
+  outline: none;
+  color: inherit;
+}
+
+input::placeholder { color: var(--color-text-tertiary); }
+
+:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
