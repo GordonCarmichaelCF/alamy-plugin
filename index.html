@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Alamy plugin — prototype</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./tokens.css" />
+
+  <style>
+    html, body { height: 100%; }
+    body { background: var(--grey-100); overflow: hidden; color: var(--color-text); }
+
+    /* =====================================================
+       FIGMA CHROME — grid with system menu bar at top
+       ===================================================== */
+    .figma {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-rows: 32px 36px 1fr;
+      grid-template-columns: 240px 1fr 240px;
+      grid-template-areas:
+        "menubar menubar menubar"
+        "topbar  topbar  topbar"
+        "left    canvas  right";
+      background: var(--grey-100);
+    }
+
+    /* macOS-style system menu bar — dark */
+    .figma__menubar {
+      grid-area: menubar;
+      background: rgba(40,40,40,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-3);
+      gap: 2px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.94);
+      position: relative;
+      z-index: 20;
+    }
+    .figma__menubar .apple {
+      width: 14px; height: 14px;
+      color: rgba(255,255,255,0.94);
+      margin-right: 8px;
+    }
+    .figma__menu-item {
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: default;
+      font-weight: 400;
+      color: rgba(255,255,255,0.94);
+    }
+    .figma__menu-item.is-app { font-weight: 700; }
+    .figma__menu-item.is-clickable { cursor: pointer; }
+    .figma__menu-item.is-clickable:hover,
+    .figma__menu-item.is-open { background: rgba(255,255,255,0.18); color: white; }
+
+    /* Plugins dropdown */
+    .plugins-menu {
+      position: absolute;
+      top: 100%;
+      background: white;
+      min-width: 280px;
+      border-radius: 6px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.08);
+      padding: 4px;
+      font-size: 12px;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      z-index: 30;
+    }
+    .plugins-menu.is-open {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .plugins-menu__item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      color: var(--color-text);
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+    }
+    .plugins-menu__item:hover {
+      background: #0d99ff;
+      color: white;
+    }
+    .plugins-menu__item.is-disabled {
+      color: var(--grey-300);
+      cursor: default;
+    }
+    .plugins-menu__item.is-disabled:hover { background: transparent; color: var(--grey-300); }
+    .plugins-menu__sep { height: 1px; background: var(--color-border); margin: 4px 0; }
+    .plugins-menu__icon {
+      width: 18px; height: 18px;
+      border-radius: 4px;
+      background: var(--color-action);
+      color: var(--color-text);
+      display: inline-grid;
+      place-items: center;
+      flex-shrink: 0;
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .plugins-menu__item:hover .plugins-menu__icon {
+      background: var(--color-action);
+      color: var(--color-text);
+    }
+
+    /* Top bar */
+    .figma__topbar {
+      grid-area: topbar;
+      background: var(--white);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-3);
+      gap: var(--space-3);
+    }
+    .figma__traffic { display: flex; gap: 6px; }
+    .figma__traffic span { width: 11px; height: 11px; border-radius: 50%; background: var(--grey-200); }
+    .figma__topbar-actions { display: flex; align-items: center; gap: var(--space-2); color: var(--grey-500); margin-left: var(--space-2); }
+    .figma__topbar-actions svg { width: 16px; height: 16px; }
+    .figma__tab {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 8px 4px 6px; border-radius: 4px;
+      background: var(--grey-100); color: var(--color-text);
+      font-size: 12px; max-width: 240px;
+    }
+    .figma__tab-icon { width: 14px; height: 14px; flex-shrink: 0; }
+    .figma__tab-close { width: 12px; height: 12px; color: var(--grey-500); opacity: 0.7; }
+
+    /* Left panel */
+    .figma__panel--left {
+      grid-area: left;
+      background: var(--white);
+      border-right: 1px solid var(--color-border);
+      display: flex; flex-direction: column; overflow: hidden;
+      font-size: 12px;
+    }
+    .figma__file-head { padding: var(--space-3) var(--space-3) var(--space-2); display: flex; align-items: center; justify-content: space-between; }
+    .figma__file-meta { padding: 0 var(--space-3) var(--space-3); }
+    .figma__file-name { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--color-text); }
+    .figma__file-name svg { width: 10px; height: 10px; color: var(--grey-500); }
+    .figma__file-loc { font-size: 11px; color: var(--grey-500); margin-top: 1px; }
+    .figma__file-tabs { display: flex; align-items: center; padding: 0 var(--space-3); border-bottom: 1px solid var(--color-border); }
+    .figma__file-tabs button { padding: var(--space-2) 0; margin-right: var(--space-3); font-size: 12px; font-weight: 500; color: var(--grey-500); border-bottom: 1.5px solid transparent; margin-bottom: -1px; }
+    .figma__file-tabs button.is-active { color: var(--color-text); border-bottom-color: var(--color-text); font-weight: 600; }
+    .figma__file-tabs .figma__search { margin-left: auto; color: var(--grey-500); width: 13px; height: 13px; }
+    .figma__section { padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+    .figma__section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .figma__section-head h4 { font-size: 12px; font-weight: 600; margin: 0; color: var(--color-text); }
+    .figma__section-head .add { width: 14px; height: 14px; color: var(--grey-500); cursor: pointer; }
+    .figma__list { list-style: none; margin: 0; padding: 0; }
+    .figma__list li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 3px; font-size: 12px; color: var(--color-text); cursor: default; }
+    .figma__list li.is-active { background: var(--color-text); color: var(--color-text-inverse); font-weight: 600; }
+    .figma__list li.is-selected { background: rgba(13, 153, 255, 0.14); color: var(--color-text); }
+    .figma__list li svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+    /* Right panel */
+    .figma__panel--right {
+      grid-area: right;
+      background: var(--white);
+      border-left: 1px solid var(--color-border);
+      display: flex; flex-direction: column; overflow: hidden;
+      font-size: 12px;
+    }
+    .figma__right-head { padding: var(--space-3); display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--color-border); }
+    .figma__avatar { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #f4a261, #e76f51); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: white; }
+    .figma__chev { width: 8px; height: 8px; color: var(--grey-500); }
+    .figma__present { margin-left: auto; width: 18px; height: 18px; color: var(--grey-500); }
+    .figma__share { padding: 5px 12px; background: #0d99ff; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .figma__tabs { display: flex; align-items: center; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); gap: var(--space-3); }
+    .figma__tabs button { font-size: 12px; font-weight: 500; color: var(--grey-500); padding: 2px 0; }
+    .figma__tabs button.is-active { color: var(--color-text); font-weight: 600; }
+    .figma__zoom { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--color-text); }
+    .figma__row { display: flex; align-items: center; padding: var(--space-2) var(--space-3); gap: 6px; font-size: 12px; color: var(--color-text); }
+    .figma__row-title { font-weight: 600; flex: 1; }
+    .figma__row .meta { color: var(--grey-500); font-size: 11px; }
+    .figma__fill { display: flex; align-items: center; gap: 8px; padding: 6px var(--space-3); font-size: 12px; }
+    .figma__fill-swatch {
+      width: 14px; height: 14px; border-radius: 2px; border: 1px solid var(--color-border);
+      background:
+        linear-gradient(45deg, #ddd 25%, transparent 25%) 0 0/8px 8px,
+        linear-gradient(-45deg, #ddd 25%, transparent 25%) 0 4px/8px 8px,
+        linear-gradient(45deg, transparent 75%, #ddd 75%) 4px -4px/8px 8px,
+        linear-gradient(-45deg, transparent 75%, #ddd 75%) 4px 0/8px 8px,
+        white;
+    }
+    .figma__fill-label { flex: 1; }
+    .figma__fill .pct { color: var(--grey-500); }
+    .figma__fill .eye { color: var(--grey-500); width: 14px; height: 14px; }
+    .figma__inspector h4 { font-size: 12px; font-weight: 600; margin: 0; padding: var(--space-3) var(--space-3) 4px; }
+    .figma__inspector .figma__row { padding-top: 4px; padding-bottom: 4px; }
+    .figma__inspector hr { border: 0; border-top: 1px solid var(--color-border); margin: var(--space-2) 0; }
+
+    /* Default right panel (no selection) — Page section */
+    .figma__page-section { padding: var(--space-3); }
+    .figma__page-section h4 { font-size: 12px; font-weight: 600; margin: 0 0 var(--space-2); color: var(--color-text); }
+    .figma__rows-stack { display: flex; flex-direction: column; }
+    .figma__rows-stack .figma__row { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+    .figma__rows-stack .figma__row:last-child { border-bottom: 0; }
+    .figma__rows-stack .figma__row .plus { margin-left: auto; color: var(--grey-500); width: 12px; height: 12px; cursor: pointer; }
+
+    /* Canvas + rectangle */
+    .figma__canvas {
+      grid-area: canvas;
+      position: relative;
+      background: #fafafa;
+      display: grid;
+      place-items: center;
+      padding: var(--space-6);
+      overflow: hidden;
+    }
+    .canvas-rect {
+      position: absolute;
+      width: 480px;
+      height: 720px;
+      top: calc(50% - 360px);
+      left: calc(50% - 240px);
+      background: var(--grey-100);
+      cursor: pointer;
+    }
+    /* Inner layers clip to the rect even though the rect itself doesn't overflow:hidden,
+       so the selection handles remain visible outside. */
+    .canvas-rect__image, .canvas-rect__cover {
+      clip-path: inset(0);
+    }
+    .canvas-rect__image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      transition: opacity 200ms ease;
+    }
+    .canvas-rect.is-filled .canvas-rect__image { display: block; }
+    .canvas-rect__dim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.1);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 200ms ease;
+    }
+    .canvas-rect.is-filled .canvas-rect__dim { opacity: 1; }
+    .canvas-rect__cover {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+    }
+    .canvas-rect__handles {
+      position: absolute;
+      inset: -1px;
+      border: 1px solid #0d99ff;
+      pointer-events: none;
+      display: none;
+    }
+    .canvas-rect.is-selected .canvas-rect__handles { display: block; }
+    .canvas-rect__handles::before,
+    .canvas-rect__handles::after,
+    .canvas-rect .h {
+      content: '';
+      position: absolute;
+      width: 7px; height: 7px;
+      background: white;
+      border: 1px solid #0d99ff;
+      border-radius: 50%;
+    }
+    .canvas-rect__handles::before { top: -4px; left: -4px; }
+    .canvas-rect__handles::after  { top: -4px; right: -4px; }
+    .canvas-rect .h-bl { bottom: -4px; left: -4px; }
+    .canvas-rect .h-br { bottom: -4px; right: -4px; }
+    .canvas-rect__size {
+      position: absolute;
+      bottom: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 2px 6px;
+      background: #0d99ff;
+      color: white;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      display: none;
+    }
+    .canvas-rect.is-selected .canvas-rect__size { display: block; }
+    .canvas-rect.is-filled .canvas-rect__size { background: rgba(0,0,0,0.7); }
+
+    .figma__toolbar {
+      position: absolute;
+      bottom: var(--space-5);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: 6px 12px; background: var(--color-bg); border-radius: var(--radius-pill);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+      color: var(--grey-500);
+    }
+    .figma__toolbar svg { width: 16px; height: 16px; }
+    .figma__toolbar .is-active { color: #0d99ff; }
+
+    /* =====================================================
+       PLUGIN MODAL — draggable, closeable, starts hidden
+       ===================================================== */
+    .plugin {
+      width: 480px;
+      max-height: min(720px, calc(100vh - 140px));
+      background: var(--color-bg);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 18px 48px rgba(0,0,0,0.22);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: fixed;
+      top: 120px;
+      left: calc(50% - 180px);
+      z-index: 10;
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .plugin.is-hidden {
+      opacity: 0;
+      transform: scale(0.96);
+      pointer-events: none;
+    }
+
+    .plugin__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-bg-inverse);
+      color: var(--color-text-inverse);
+      flex-shrink: 0;
+      cursor: grab;
+      user-select: none;
+    }
+    .plugin__header.is-dragging { cursor: grabbing; }
+
+    .plugin__logo { height: 20px; width: auto; display: block; color: white; }
+
+    .plugin__header-right {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .plugin__tier {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px 3px 7px;
+      border-radius: var(--radius-pill);
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font: var(--weight-medium) var(--size-11)/14px var(--font-ui);
+    }
+    .plugin__tier::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--color-action);
+    }
+
+    .plugin__close {
+      width: 22px; height: 22px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      color: rgba(255,255,255,0.85);
+      transition: background-color 120ms ease, color 120ms ease;
+      cursor: pointer;
+    }
+    .plugin__close:hover {
+      background: rgba(255,255,255,0.15);
+      color: white;
+    }
+    .plugin__close svg { width: 10px; height: 10px; }
+
+    .plugin__body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-5) var(--space-4);
+    }
+
+    /* =====================================================
+       ICONS / Components / Search / Menu / Tiles / Detail
+       (same as before)
+       ===================================================== */
+    .icon { display: inline-block; vertical-align: middle; fill: currentColor; flex-shrink: 0; }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 10px var(--space-5); border-radius: var(--radius-pill); font: var(--weight-semibold) var(--size-13)/18px var(--font-ui); transition: background-color 120ms ease, transform 120ms ease; white-space: nowrap; }
+    .btn:active { transform: translateY(1px); }
+    .btn--primary { background: var(--color-action); color: var(--color-text-on-action); }
+    .btn--primary:hover { background: var(--color-action-hover); }
+    .btn--secondary { background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border-strong); }
+    .btn--secondary:hover { background: var(--color-bg-hover); }
+    .btn--ghost { background: transparent; color: var(--color-text-secondary); padding: 6px 10px; }
+    .btn--ghost:hover { background: var(--color-bg-hover); color: var(--color-text); }
+    .btn--block { width: 100%; }
+
+    .back { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 6px; margin-left: -8px; margin-bottom: var(--space-4); border-radius: var(--radius-pill); color: var(--color-text-secondary); font: var(--weight-medium) var(--size-12)/14px var(--font-ui); }
+    .back:hover { background: var(--color-bg-hover); color: var(--color-text); }
+
+    .search { display: flex; align-items: center; gap: 4px; padding: 3px; background: var(--color-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); position: relative; transition: border-color 120ms ease; }
+    .search:focus-within { border-color: var(--color-text); }
+    .search__dropdown { display: inline-flex; align-items: center; gap: 4px; padding: 6px 6px 6px 10px; border-radius: var(--radius-pill); color: var(--color-text); flex-shrink: 0; cursor: pointer; }
+    .search__dropdown:hover { background: var(--color-bg-hover); }
+    .search__dropdown > .icon { width: 14px; height: 14px; }
+    .search__dropdown .chev { width: 9px; height: 9px; color: var(--color-text-tertiary); margin-left: 1px; }
+    .search__smart { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: var(--radius-pill); background: var(--color-bg-inverse); color: var(--color-text-inverse); flex-shrink: 0; cursor: pointer; transition: background-color 180ms ease, color 180ms ease; font-size: 12px; font-weight: 500; }
+    .search__smart[data-state="on"] { background: var(--color-action); color: var(--color-text-on-action); }
+    .search__smart .help { width: 13px; height: 13px; opacity: 0.85; }
+    .search__smart-label {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .search__smart { white-space: nowrap; }
+
+    /* Tooltip on the smart-search pill */
+    .tooltip {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      width: 240px;
+      padding: 10px 12px;
+      background: var(--color-text);
+      color: white;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.1);
+      font-size: 12px;
+      line-height: 16px;
+      text-align: left;
+      opacity: 0;
+      transform: translateY(-2px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      z-index: 12;
+    }
+    .tooltip::before {
+      content: '';
+      position: absolute;
+      top: -4px;
+      left: 16px;
+      width: 8px; height: 8px;
+      background: var(--color-text);
+      transform: rotate(45deg);
+    }
+    .search__smart:hover .tooltip,
+    .search__smart:focus-visible .tooltip {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .tooltip__title { font-weight: 600; margin-bottom: 4px; color: white; }
+    .tooltip__body { color: rgba(255,255,255,0.85); }
+    .toggle { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; background: var(--color-bg); border-radius: var(--radius-pill); color: var(--color-text); font: var(--weight-bold) 9px/12px var(--font-ui); letter-spacing: 0.04em; }
+    .toggle__knob { width: 9px; height: 9px; border-radius: 50%; background: var(--color-text); }
+    .toggle[data-state="off"] .toggle__knob { order: -1; }
+    .search__input { flex: 1; min-width: 0; padding: 6px 4px; font-size: var(--size-13); color: var(--color-text); background: transparent; }
+    .search__input::placeholder { color: var(--color-text-tertiary); }
+    .search__action { flex-shrink: 0; width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 50%; color: var(--color-text-secondary); cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+    .search__action:hover { background: var(--color-bg-hover); color: var(--color-text); }
+    .search__action--primary { background: var(--color-text); color: var(--color-text-inverse); }
+    .search__action--primary:hover { opacity: 0.9; background: var(--color-text); color: var(--color-text-inverse); }
+    .search__action .icon { width: 13px; height: 13px; }
+
+    .menu { position: absolute; top: calc(100% + 6px); left: 0; width: 220px; background: var(--color-bg); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08); padding: 4px; z-index: 10; opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity 140ms ease, transform 140ms ease; }
+    .menu.is-open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .menu__item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 4px; font-size: var(--size-13); color: var(--color-text); cursor: pointer; width: 100%; text-align: left; }
+    .menu__item:hover { background: var(--color-bg-hover); }
+    .menu__item.is-selected { background: var(--color-text); color: var(--color-text-inverse); }
+    .menu__item .icon { width: 14px; height: 14px; }
+    .menu__sep { height: 1px; background: var(--color-border); margin: 4px 8px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-bg); color: var(--color-text); font: var(--weight-regular) var(--size-12)/14px var(--font-ui); cursor: pointer; text-align: left; transition: background-color 120ms ease, border-color 120ms ease; }
+    .chip:hover { background: var(--color-bg-hover); border-color: var(--color-border-strong); }
+    .chip__spark { width: 6px; height: 6px; border-radius: 50%; background: var(--color-action); }
+    .recents { list-style: none; padding: 0; margin: 0; }
+    .recents li { display: flex; align-items: center; gap: var(--space-2); padding: 8px 0; color: var(--color-text-secondary); font-size: var(--size-13); cursor: pointer; border-bottom: 1px solid var(--color-border); }
+    .recents li:last-child { border-bottom: 0; }
+    .recents li:hover { color: var(--color-text); }
+    .recents__icon { color: var(--color-text-tertiary); width: 13px; height: 13px; }
+
+    .results__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .tile { position: relative; border-radius: var(--radius-sm); overflow: hidden; background: var(--color-bg-hover); cursor: pointer; aspect-ratio: 4 / 5; }
+    .tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 240ms ease; }
+    .tile:hover img { transform: scale(1.04); }
+    .tile__provenance { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.45) 45%, transparent 70%); color: var(--color-text-inverse); padding: var(--space-3); display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; opacity: 0; transition: opacity 160ms ease; }
+    .tile:hover .tile__provenance, .tile:focus-within .tile__provenance { opacity: 1; }
+    .tile__verified { position: absolute; top: 6px; left: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 4px; border-radius: var(--radius-pill); background: var(--color-action); color: var(--color-text-on-action); font: var(--weight-bold) 9px/12px var(--font-ui); }
+    .tile__verified::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--color-text-on-action); }
+    .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: var(--radius-pill); font: var(--weight-medium) 10px/13px var(--font-ui); background: rgba(255,255,255,0.16); color: var(--color-text-inverse); backdrop-filter: blur(4px); }
+    .badge--green { background: var(--color-action); color: var(--color-text-on-action); }
+
+    .detail__hero { position: relative; border-radius: var(--radius-md); overflow: hidden; aspect-ratio: 4 / 3; background: var(--color-bg-hover); margin-bottom: var(--space-4); }
+    .detail__hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .detail__caption { font-family: var(--font-display); font-weight: var(--weight-bold); font-size: 20px; line-height: 1.18; letter-spacing: -0.01em; margin: 0 0 var(--space-3); color: var(--color-text); }
+    .detail__contrib { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); }
+    .detail__avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--grey-200); display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); flex-shrink: 0; }
+    .detail__contrib-name { font: var(--weight-semibold) var(--size-13)/16px var(--font-ui); }
+    .detail__contrib-meta { color: var(--color-text-secondary); font-size: var(--size-12); }
+    .detail__verified-tick { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px 1px 5px; margin-left: var(--space-1); border-radius: var(--radius-pill); background: var(--color-action-subtle); color: var(--color-text); font: var(--weight-bold) 9px/12px var(--font-ui); border: 1px solid var(--color-action); }
+    .detail__verified-tick::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--color-action); }
+
+    .section-label { font-family: var(--font-ui); font-weight: var(--weight-medium); font-size: var(--size-11); line-height: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: var(--space-2); }
+    .tiers { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
+    .tier { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); cursor: pointer; text-align: left; transition: border-color 120ms ease, background-color 120ms ease; }
+    .tier:hover { border-color: var(--color-border-strong); }
+    .tier.is-selected { border-color: var(--color-action); background: var(--color-action-subtle); }
+    .tier__radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--color-border-strong); background: var(--color-bg); flex-shrink: 0; margin-top: 1px; position: relative; }
+    .tier.is-selected .tier__radio { border-color: var(--color-text); }
+    .tier.is-selected .tier__radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-text); }
+    .tier__body { flex: 1; min-width: 0; }
+    .tier__title { display: flex; align-items: center; gap: 6px; font: var(--weight-semibold) var(--size-13)/16px var(--font-ui); color: var(--color-text); }
+    .tier__price { font: var(--weight-semibold) var(--size-13)/16px var(--font-ui); color: var(--color-text); }
+    .tier__meta { font-size: var(--size-12); line-height: 16px; color: var(--color-text-secondary); margin-top: 2px; }
+    .tier__chip { display: inline-flex; padding: 1px 6px; border-radius: var(--radius-pill); background: var(--color-action); color: var(--color-text-on-action); font: var(--weight-bold) 9px/12px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; }
+
+    .facts { border-top: 1px solid var(--color-border); margin-bottom: var(--space-4); }
+    .facts__row { display: flex; justify-content: space-between; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--color-border); font-size: var(--size-12); }
+    .facts__label { color: var(--color-text-secondary); }
+    .facts__value { color: var(--color-text); font-weight: var(--weight-medium); display: inline-flex; align-items: center; gap: 6px; }
+    .facts__check { width: 12px; height: 12px; border-radius: 50%; background: var(--color-action); display: inline-grid; place-items: center; color: var(--color-text-on-action); font-size: 8px; font-weight: 700; }
+
+    .plugin__action { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border); background: var(--color-bg); display: flex; gap: var(--space-2); flex-shrink: 0; }
+
+    .success { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-4); padding: var(--space-12) var(--space-6); }
+    .success__icon { width: 48px; height: 48px; border-radius: 50%; background: var(--color-action); display: grid; place-items: center; color: var(--color-text-on-action); }
+
+    .stack { display: flex; flex-direction: column; gap: var(--space-3); }
+    .stack-sm { gap: var(--space-2); }
+    .stack-md { gap: var(--space-4); }
+    .stack-lg { gap: var(--space-5); }
+    .row { display: flex; align-items: center; gap: var(--space-2); }
+    .between { justify-content: space-between; }
+    .muted { color: var(--color-text-secondary); }
+    .hidden { display: none !important; }
+    h1, h2, h3, p { margin: 0; }
+
+    .toast { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(10px); background: var(--color-text); color: white; padding: 10px 16px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display: inline-flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 200ms ease, transform 200ms ease; z-index: 3; }
+    .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-action); }
+
+    .protonav { position: fixed; bottom: var(--space-4); right: var(--space-4); z-index: 40; display: flex; gap: 4px; padding: 4px; background: var(--color-bg); border-radius: var(--radius-pill); box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 11px; }
+    .protonav button { padding: 4px 10px; border-radius: var(--radius-pill); color: var(--color-text-secondary); font-weight: 500; }
+    .protonav button.is-active { background: var(--color-text); color: var(--color-text-inverse); }
+  </style>
+</head>
+
+<body>
+
+  <!-- =====================================================
+       SVG SPRITE
+       ===================================================== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-search" viewBox="0 0 640 640"><path d="M432 272C432 183.6 360.4 112 272 112C183.6 112 112 183.6 112 272C112 360.4 183.6 432 272 432C360.4 432 432 360.4 432 272zM401.1 435.1C365.7 463.2 320.8 480 272 480C157.1 480 64 386.9 64 272C64 157.1 157.1 64 272 64C386.9 64 480 157.1 480 272C480 320.8 463.2 365.7 435.1 401.1L569 535C578.4 544.4 578.4 559.6 569 568.9C559.6 578.2 544.4 578.3 535.1 568.9L401.1 435.1z"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 640 640"><path d="M213.1 128.8L202.7 160L128 160C92.7 160 64 188.7 64 224L64 480C64 515.3 92.7 544 128 544L512 544C547.3 544 576 515.3 576 480L576 224C576 188.7 547.3 160 512 160L437.3 160L426.9 128.8C420.4 109.2 402.1 96 381.4 96L258.6 96C237.9 96 219.6 109.2 213.1 128.8zM320 256C373 256 416 299 416 352C416 405 373 448 320 448C267 448 224 405 224 352C224 299 267 256 320 256z"/></symbol>
+      <symbol id="i-image" viewBox="0 0 640 640"><path d="M160 144C151.2 144 144 151.2 144 160L144 480C144 488.8 151.2 496 160 496L480 496C488.8 496 496 488.8 496 480L496 160C496 151.2 488.8 144 480 144L160 144zM96 160C96 124.7 124.7 96 160 96L480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160zM224 192C241.7 192 256 206.3 256 224C256 241.7 241.7 256 224 256C206.3 256 192 241.7 192 224C192 206.3 206.3 192 224 192zM360 264C368.5 264 376.4 268.5 380.7 275.8L460.7 411.8C465.1 419.2 465.1 428.4 460.8 435.9C456.5 443.4 448.6 448 440 448L200 448C191.1 448 182.8 443 178.7 435.1C174.6 427.2 175.2 417.6 180.3 410.3L236.3 330.3C240.8 323.9 248.1 320.1 256 320.1C263.9 320.1 271.2 323.9 275.7 330.3L292.9 354.9L339.4 275.9C343.7 268.6 351.6 264.1 360.1 264.1z"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 640 640"><path d="M303.5 473C312.9 482.4 328.1 482.4 337.4 473L537.4 273C546.8 263.6 546.8 248.4 537.4 239.1C528 229.8 512.8 229.7 503.5 239.1L320.5 422.1L137.5 239.1C128.1 229.7 112.9 229.7 103.6 239.1C94.3 248.5 94.2 263.7 103.6 273L303.6 473z"/></symbol>
+      <symbol id="i-help" viewBox="0 0 640 640"><path d="M544 320C544 196.3 443.7 96 320 96C196.3 96 96 196.3 96 320C96 443.7 196.3 544 320 544C443.7 544 544 443.7 544 320zM64 320C64 178.6 178.6 64 320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576C178.6 576 64 461.4 64 320zM320 224C293.5 224 272 245.5 272 272C272 280.8 264.8 288 256 288C247.2 288 240 280.8 240 272C240 227.8 275.8 192 320 192C364.2 192 400 227.8 400 272C400 311.6 374.3 332.3 353.8 342.1C342.3 347.6 336 356.6 336 364.3L336 370C336 378.8 328.8 386 320 386C311.2 386 304 378.8 304 370L304 364.3C304 339.7 322.3 321.7 340 313.3C354.5 306.4 368 294.5 368 272.1C368 245.6 346.5 224.1 320 224.1zM296 440C296 426.7 306.7 416 320 416C333.3 416 344 426.7 344 440C344 453.3 333.3 464 320 464C306.7 464 296 453.3 296 440z"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 640 640"><path d="M239 471L71 303C65.4 297.4 64 290.3 64 283.1C64 275.9 65.4 268.8 71 263.2L239 95.2C248.4 85.8 263.6 85.8 272.9 95.2C282.2 104.6 282.3 119.8 272.9 129.1L145 257L552 257C565.3 257 576 267.7 576 281C576 294.3 565.3 305 552 305L145 305L273 433C282.4 442.4 282.4 457.6 273 466.9C263.6 476.2 248.4 476.3 239.1 466.9z"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 640 640"><path d="M320 96C196.3 96 96 196.3 96 320C96 443.7 196.3 544 320 544C443.7 544 544 443.7 544 320C544 196.3 443.7 96 320 96zM64 320C64 178.6 178.6 64 320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576C178.6 576 64 461.4 64 320zM304 176C304 167.2 311.2 160 320 160C328.8 160 336 167.2 336 176L336 313L417 367C424.4 372 426.4 381.9 421.5 389.3C416.6 396.7 406.6 398.6 399.3 393.7L311.3 335.7C306.9 332.7 304 327.7 304 322.3L304 176z"/></symbol>
+      <symbol id="i-x" viewBox="0 0 640 640"><path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/></symbol>
+      <symbol id="i-x-small" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-vectors" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 18L12 5l8 13H4z"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/><circle cx="20" cy="18" r="1.5" fill="currentColor"/><circle cx="12" cy="5" r="1.5" fill="currentColor"/></symbol>
+      <symbol id="i-brush" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M14.5 4.5L19.5 9.5 11 18a3 3 0 0 1-4-4l7.5-9.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M5 21c1.5-1 1.5-3 3-3"/></symbol>
+      <symbol id="i-360" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6 8l-2 2 2 2M18 14l2-2-2-2"/></symbol>
+      <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M21 8l-4 4 4 4V8z" fill="currentColor"/></symbol>
+      <symbol id="i-news" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7 9h10M7 12h10M7 15h6"/><circle cx="18" cy="15.5" r="1" fill="currentColor"/></symbol>
+      <symbol id="i-search-image" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="11" r="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="17" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M19.5 19.5L22 22"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-frame" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path stroke="currentColor" stroke-width="1.5" d="M4 8h16M8 4v16"/></symbol>
+      <symbol id="i-figma-logo" viewBox="0 0 24 24"><path fill="#0acf83" d="M8.5 24a3.5 3.5 0 0 0 3.5-3.5V17H8.5a3.5 3.5 0 0 0 0 7z"/><path fill="#a259ff" d="M5 13.5A3.5 3.5 0 0 1 8.5 10H12v7H8.5A3.5 3.5 0 0 1 5 13.5z"/><path fill="#f24e1e" d="M5 6.5A3.5 3.5 0 0 1 8.5 3H12v7H8.5A3.5 3.5 0 0 1 5 6.5z"/><path fill="#ff7262" d="M12 3h3.5a3.5 3.5 0 0 1 0 7H12V3z"/><path fill="#1abcfe" d="M19 13.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7L8 5z"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.5" d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></symbol>
+      <symbol id="i-apple" viewBox="0 0 24 24"><path fill="currentColor" d="M16.4 12.7c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1.9-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.7-1-2.7-4.1zM14 5.3c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.5z"/></symbol>
+      <symbol id="i-alamy" viewBox="0 0 73 35"><path d="M13.9388 12.005C13.9388 7.42 12.1888 4.9 7.63881 4.9C3.01881 4.9 1.19881 7.42 1.19881 12.11V12.775H5.85381V12.005C5.85381 10.045 6.37881 9.205 7.63881 9.205C8.75881 9.205 9.28381 9.73 9.28381 11.27C9.24881 15.225 0.778807 14.49 0.778807 22.505C0.778807 26.53 2.80881 28.35 5.25881 28.35C7.28881 28.35 8.44381 27.44 9.28381 25.445C9.28381 26.075 9.45881 27.405 10.1938 28H14.2888C13.9388 26.81 13.9388 26.04 13.9388 24.64V12.005ZM9.28381 22.61C8.96881 23.1 8.33881 24.045 7.25381 24.045C6.09881 24.045 5.43381 23.205 5.43381 21.7C5.43381 19.005 8.23381 18.235 9.28381 16.52V22.61ZM20.6944 28V-4.17233e-07H16.0394V28H20.6944ZM35.539 12.005C35.539 7.42 33.789 4.9 29.239 4.9C24.619 4.9 22.799 7.42 22.799 12.11V12.775H27.454V12.005C27.454 10.045 27.979 9.205 29.239 9.205C30.359 9.205 30.884 9.73 30.884 11.27C30.849 15.225 22.379 14.49 22.379 22.505C22.379 26.53 24.409 28.35 26.859 28.35C28.889 28.35 30.044 27.44 30.884 25.445C30.884 26.075 31.059 27.405 31.794 28H35.889C35.539 26.81 35.539 26.04 35.539 24.64V12.005ZM30.884 22.61C30.569 23.1 29.939 24.045 28.854 24.045C27.699 24.045 27.034 23.205 27.034 21.7C27.034 19.005 29.834 18.235 30.884 16.52V22.61ZM53.9495 4.9C51.8495 4.9 50.3445 6.405 49.7145 7.98C49.2595 5.915 48.2795 4.9 46.2495 4.9C44.0795 4.9 42.8545 6.475 42.2945 7.805V5.25H37.6395V28H42.2945V11.76C42.2945 9.975 42.8895 9.205 43.9045 9.205C44.8495 9.205 45.3045 9.87 45.3045 11.725V28H49.9945V11.76C49.9945 9.975 50.5545 9.205 51.5695 9.205C52.5495 9.205 53.0045 9.87 53.0045 11.725V28H57.6595V12.11C57.6595 7.175 56.9945 4.9 53.9495 4.9ZM67.5492 21.49C67.5492 23.275 66.9542 24.045 65.7292 24.045C64.5742 24.045 64.0492 23.38 64.0492 21.525V5.25H59.3942V21.14C59.3942 26.075 60.1642 28.35 63.3842 28.35C65.7642 28.35 66.9892 26.705 67.5492 25.445V27.37C67.5492 29.995 66.8492 30.695 65.0992 30.695H60.3742V35H66.2192C71.2592 35 72.2042 32.83 72.2042 27.37V5.25H67.5492V21.49Z"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- =====================================================
+       FIGMA CHROME
+       ===================================================== -->
+  <div class="figma">
+
+    <!-- macOS-style menu bar -->
+    <div class="figma__menubar">
+      <svg class="apple icon"><use href="#i-apple"/></svg>
+      <span class="figma__menu-item is-app">Figma</span>
+      <span class="figma__menu-item">File</span>
+      <span class="figma__menu-item">Edit</span>
+      <span class="figma__menu-item">View</span>
+      <span class="figma__menu-item">Object</span>
+      <span class="figma__menu-item">Type</span>
+      <span class="figma__menu-item is-clickable" id="plugins-menu-trigger">Plugins</span>
+      <span class="figma__menu-item">Widgets</span>
+      <span class="figma__menu-item">Window</span>
+      <span class="figma__menu-item">Help</span>
+
+      <!-- Plugins dropdown -->
+      <div class="plugins-menu" id="plugins-menu" style="left: var(--plugins-menu-left, 240px);">
+        <button class="plugins-menu__item" id="open-alamy-plugin">
+          <span class="plugins-menu__icon">a</span>
+          Alamy Stock Photos
+        </button>
+        <div class="plugins-menu__sep"></div>
+        <button class="plugins-menu__item is-disabled">Run last plugin</button>
+        <div class="plugins-menu__sep"></div>
+        <button class="plugins-menu__item">Manage plugins…</button>
+      </div>
+    </div>
+
+    <!-- Top bar -->
+    <div class="figma__topbar">
+      <div class="figma__traffic"><span></span><span></span><span></span></div>
+      <div class="figma__topbar-actions">
+        <svg class="icon"><use href="#i-figma-logo"/></svg>
+        <span style="font-size:12px; color:var(--color-text);">Home</span>
+      </div>
+      <div class="figma__tab" style="margin-left:auto;">
+        <svg class="figma__tab-icon"><use href="#i-figma-logo"/></svg>
+        <span>Rugby World June</span>
+        <svg class="figma__tab-close"><use href="#i-x-small"/></svg>
+      </div>
+      <div style="margin-right:auto;"></div>
+    </div>
+
+    <!-- Left panel -->
+    <aside class="figma__panel--left">
+      <div class="figma__file-head">
+        <svg class="icon" width="14" height="14"><use href="#i-figma-logo"/></svg>
+        <svg class="icon" width="14" height="14" style="color:var(--grey-500);"><use href="#i-frame"/></svg>
+      </div>
+      <div class="figma__file-meta">
+        <span class="figma__file-name">Rugby World June <svg><use href="#i-chevron-down"/></svg></span>
+        <div class="figma__file-loc">Drafts</div>
+      </div>
+      <div class="figma__file-tabs">
+        <button class="is-active">File</button>
+        <button>Assets</button>
+        <svg class="icon figma__search"><use href="#i-search"/></svg>
+      </div>
+      <div class="figma__section">
+        <div class="figma__section-head">
+          <h4>Pages</h4>
+          <svg class="icon add"><use href="#i-plus"/></svg>
+        </div>
+        <ul class="figma__list">
+          <li class="is-active">Cover Design</li>
+        </ul>
+      </div>
+      <div class="figma__section" style="border-bottom:0;">
+        <div class="figma__section-head"><h4>Layers</h4></div>
+        <ul class="figma__list">
+          <li id="layer-rect">
+            <svg class="icon"><use href="#i-frame"/></svg>
+            Cover
+          </li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Canvas -->
+    <main class="figma__canvas">
+
+      <div class="canvas-rect" id="canvas-rect">
+        <img class="canvas-rect__image" id="canvas-rect-image" alt="" />
+        <div class="canvas-rect__dim"></div>
+        <img class="canvas-rect__cover" src="./images/rugby-world-cover.png" alt="Rugby World cover layout" />
+        <div class="canvas-rect__handles">
+          <span class="h h-bl"></span>
+          <span class="h h-br"></span>
+        </div>
+        <div class="canvas-rect__size" id="canvas-rect-size">Cover · 360 × 540</div>
+      </div>
+
+      <!-- =====================================================
+           PLUGIN MODAL — hidden by default
+           ===================================================== -->
+      <section class="plugin is-hidden" role="dialog" aria-label="Alamy plugin" id="plugin">
+
+        <header class="plugin__header" id="plugin-header">
+          <svg class="plugin__logo icon" width="50" height="24" aria-label="Alamy"><use href="#i-alamy"/></svg>
+          <div class="plugin__header-right">
+            <span class="plugin__tier">Enterprise · Jamie R</span>
+            <button class="plugin__close" type="button" id="plugin-close" title="Close plugin">
+              <svg class="icon"><use href="#i-x"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- HOME -->
+        <div class="plugin__body" data-state="home">
+          <div class="stack-lg" style="display:flex; flex-direction:column;">
+            <div class="stack stack-sm">
+              <h1 class="text-display-lg">What are you looking for?</h1>
+              <p class="text-body muted">Describe the image. Mood, subject, light, era — anything.</p>
+            </div>
+
+            <div class="search" id="search-field">
+              <button class="search__dropdown" type="button" id="dropdown-trigger" aria-haspopup="listbox" aria-expanded="false" title="Image type">
+                <svg class="icon" id="dropdown-icon"><use href="#i-image"/></svg>
+                <svg class="icon chev"><use href="#i-chevron-down"/></svg>
+              </button>
+
+              <button class="search__smart" type="button" data-state="on" id="smart-toggle">
+                <span class="toggle" data-state="on">
+                  <span class="toggle__label">ON</span>
+                  <span class="toggle__knob"></span>
+                </span>
+                <span class="search__smart-label">Smart search</span>
+                <svg class="icon help"><use href="#i-help"/></svg>
+                <div class="tooltip" id="smart-tooltip" role="tooltip">
+                  <div class="tooltip__title">Smart search</div>
+                  <div class="tooltip__body" id="smart-tooltip-body">Try describing what you're looking for in your own words. Switch it off for exact keyword matching.</div>
+                </div>
+              </button>
+
+              <input type="text" class="search__input" id="search-input" placeholder="Search for images" autocomplete="off" />
+
+              <button class="search__action search__action--primary" type="button" id="submit-btn" title="Search">
+                <svg class="icon"><use href="#i-search"/></svg>
+              </button>
+
+              <div class="menu" id="menu" role="listbox">
+                <button class="menu__item is-selected" data-value="all" data-icon="i-image" role="option"><svg class="icon"><use href="#i-image"/></svg> All images</button>
+                <button class="menu__item" data-value="photographs" data-icon="i-camera" role="option"><svg class="icon"><use href="#i-camera"/></svg> Photographs</button>
+                <button class="menu__item" data-value="vectors" data-icon="i-vectors" role="option"><svg class="icon"><use href="#i-vectors"/></svg> Vectors</button>
+                <button class="menu__item" data-value="illustrations" data-icon="i-brush" role="option"><svg class="icon"><use href="#i-brush"/></svg> Illustrations</button>
+                <button class="menu__item" data-value="360" data-icon="i-360" role="option"><svg class="icon"><use href="#i-360"/></svg> 360° images</button>
+                <button class="menu__item" data-value="video" data-icon="i-video" role="option"><svg class="icon"><use href="#i-video"/></svg> Video</button>
+                <button class="menu__item" data-value="news" data-icon="i-news" role="option"><svg class="icon"><use href="#i-news"/></svg> Live news</button>
+                <div class="menu__sep"></div>
+                <button class="menu__item" data-value="by-image" data-icon="i-search-image" role="option"><svg class="icon"><use href="#i-search-image"/></svg> Search by image</button>
+              </div>
+            </div>
+
+            <div class="stack stack-sm">
+              <p class="section-label">Try a brief</p>
+              <div class="chips" id="chips">
+                <button class="chip" type="button"><span class="chip__spark"></span>Dynamic women's Six Nations</button>
+                <button class="chip" type="button"><span class="chip__spark"></span>Try celebration, packed stadium</button>
+                <button class="chip" type="button"><span class="chip__spark"></span>Pre-match anthems</button>
+                <button class="chip" type="button"><span class="chip__spark"></span>Scrum collapse, wet conditions</button>
+              </div>
+            </div>
+
+            <div class="stack stack-sm">
+              <p class="section-label">Recent</p>
+              <ul class="recents">
+                <li>
+                  <svg class="icon recents__icon"><use href="#i-clock"/></svg>
+                  <span style="flex:1;">England v France, line-out</span>
+                  <span style="color:var(--color-text-tertiary); font-size:11px;">Yesterday</span>
+                </li>
+                <li>
+                  <svg class="icon recents__icon"><use href="#i-clock"/></svg>
+                  <span style="flex:1;">Stadium atmosphere, Twickenham</span>
+                  <span style="color:var(--color-text-tertiary); font-size:11px;">3d ago</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- RESULTS -->
+        <div class="plugin__body hidden" data-state="results">
+          <button class="back" type="button" data-go="home">
+            <svg class="icon" width="11" height="11"><use href="#i-arrow-left"/></svg>
+            Back
+          </button>
+          <div class="results__head">
+            <div>
+              <p class="section-label" style="margin-bottom:4px;"><span id="results-count">19</span> results · AI curated</p>
+              <h2 class="text-heading" id="results-query">"dynamic women's Six Nations"</h2>
+            </div>
+          </div>
+          <div class="grid" id="results-grid"></div>
+        </div>
+
+        <!-- DETAIL -->
+        <div class="plugin__body hidden" data-state="detail">
+          <button class="back" type="button" data-go="results">
+            <svg class="icon" width="11" height="11"><use href="#i-arrow-left"/></svg>
+            Back to results
+          </button>
+          <div class="detail__hero"><img id="detail-img" src="" alt="" /></div>
+          <h2 class="detail__caption" id="detail-caption">—</h2>
+          <div class="detail__contrib">
+            <div class="detail__avatar" id="detail-avatar">MO</div>
+            <div>
+              <div class="detail__contrib-name">
+                <span id="detail-contrib">—</span>
+                <span class="detail__verified-tick">Verified</span>
+              </div>
+              <div class="detail__contrib-meta" id="detail-captured">—</div>
+            </div>
+          </div>
+
+          <p class="section-label">Choose licence</p>
+          <div class="tiers" id="tiers">
+            <button class="tier" type="button" data-tier="editorial"><span class="tier__radio"></span><span class="tier__body"><span class="tier__title">Editorial single-use</span><span class="tier__meta">News, blog, editorial print. One placement.</span></span><span class="tier__price">£45</span></button>
+            <button class="tier" type="button" data-tier="commercial"><span class="tier__radio"></span><span class="tier__body"><span class="tier__title">Commercial unlimited</span><span class="tier__meta">Ads, marketing, web &amp; print. No expiry.</span></span><span class="tier__price">£280</span></button>
+            <button class="tier is-selected" type="button" data-tier="enterprise"><span class="tier__radio"></span><span class="tier__body"><span class="tier__title">Indemnified Enterprise <span class="tier__chip">Inc.</span></span><span class="tier__meta">Covered by your Enterprise subscription.</span></span><span class="tier__price">—</span></button>
+          </div>
+
+          <p class="section-label">Provenance</p>
+          <div class="facts">
+            <div class="facts__row"><span class="facts__label">Contributor</span><span class="facts__value"><span class="facts__check">✓</span>Verified</span></div>
+            <div class="facts__row"><span class="facts__label">Capture context</span><span class="facts__value" id="fact-context">Editorial · on-site</span></div>
+            <div class="facts__row"><span class="facts__label">Content-safety check</span><span class="facts__value"><span class="facts__check">✓</span>Passed</span></div>
+            <div class="facts__row"><span class="facts__label">Clearance</span><span class="facts__value" id="fact-clearance">Cleared for re-use, Indemnified</span></div>
+          </div>
+        </div>
+
+        <div class="plugin__action hidden" id="action-bar">
+          <button class="btn btn--secondary" type="button" id="save-btn">Save</button>
+          <button class="btn btn--primary btn--block" type="button" id="license-btn">License</button>
+        </div>
+
+        <!-- SUCCESS -->
+        <div class="plugin__body hidden" data-state="success">
+          <div class="success">
+            <div class="success__icon"><svg width="20" height="20"><use href="#i-check"/></svg></div>
+            <div class="stack stack-sm" style="align-items:center;">
+              <h2 class="text-display-lg">Inserted</h2>
+              <p class="text-body muted" style="max-width:240px;">Placed into the selected rectangle. Licence recorded against your Enterprise account.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Right panel -->
+    <aside class="figma__panel--right">
+      <div class="figma__right-head">
+        <div class="figma__avatar">JR</div>
+        <svg class="figma__chev"><use href="#i-chevron-down"/></svg>
+        <svg class="figma__present"><use href="#i-play"/></svg>
+        <button class="figma__share">Share</button>
+      </div>
+      <div class="figma__tabs">
+        <button class="is-active">Design</button>
+        <button>Prototype</button>
+        <span class="figma__zoom">178% <svg class="icon" width="9" height="9"><use href="#i-chevron-down"/></svg></span>
+      </div>
+
+      <!-- Default inspector (nothing selected) -->
+      <div class="figma__inspector" id="inspector-default">
+        <div class="figma__page-section">
+          <h4>Page</h4>
+          <div class="figma__fill">
+            <span class="figma__fill-swatch" style="background: #f5f5f5;"></span>
+            <span class="figma__fill-label">F5F5F5</span>
+            <span class="pct">100%</span>
+            <svg class="eye"><use href="#i-eye"/></svg>
+          </div>
+        </div>
+        <hr/>
+        <div class="figma__rows-stack" style="padding: 0 var(--space-3);">
+          <div class="figma__row"><span class="figma__row-title">Variables</span><svg class="plus"><use href="#i-plus"/></svg></div>
+          <div class="figma__row"><span class="figma__row-title">Styles</span><svg class="plus"><use href="#i-plus"/></svg></div>
+          <div class="figma__row"><span class="figma__row-title">Export</span><svg class="plus"><use href="#i-plus"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Selected inspector (Image / Rectangle 1) -->
+      <div class="figma__inspector hidden" id="inspector-selected">
+        <div class="figma__row"><span class="figma__row-title">Image</span></div>
+        <hr/>
+        <h4>Position</h4>
+        <div class="figma__row"><span class="meta">X</span><span style="flex:1;">−420</span><span class="meta">Y</span><span style="flex:1;">−180</span></div>
+        <h4>Layout</h4>
+        <div class="figma__row"><span class="meta">W</span><span style="flex:1;">400</span><span class="meta">H</span><span style="flex:1;">300</span></div>
+        <h4>Appearance</h4>
+        <div class="figma__row"><span style="flex:1;">100%</span></div>
+        <h4>Fill</h4>
+        <div class="figma__fill">
+          <span class="figma__fill-swatch" id="inspector-swatch"></span>
+          <span class="figma__fill-label" id="inspector-fill-label">Image</span>
+          <span class="pct">100%</span>
+          <svg class="eye"><use href="#i-eye"/></svg>
+        </div>
+        <hr/>
+        <h4>Stroke</h4>
+        <h4>Effects</h4>
+        <h4>Export</h4>
+      </div>
+    </aside>
+
+    <!-- Bottom toolbar -->
+    <div class="figma__toolbar" aria-hidden="true">
+      <svg class="is-active"><use href="#i-frame"/></svg>
+      <svg><use href="#i-image"/></svg>
+      <svg><use href="#i-vectors"/></svg>
+      <svg><use href="#i-brush"/></svg>
+      <svg><use href="#i-news"/></svg>
+    </div>
+
+    <div class="toast" id="toast">
+      <span class="toast__dot"></span>
+      <span>Inserted · Licensed under Enterprise</span>
+    </div>
+  </div>
+
+  <!-- Prototype state nav -->
+  <nav class="protonav" aria-label="Prototype controls">
+    <button data-go="home">Home</button>
+    <button data-go="results">Results</button>
+    <button data-go="detail">Detail</button>
+    <button data-go="success">Inserted</button>
+  </nav>
+
+  <script>
+    // =====================================================
+    // Data
+    // =====================================================
+    const RESULTS = [
+      {id:"alm-w6n-01", src:"./images/Screenshot 2026-05-28 at 15.42.43.png", caption:"Ireland players sign autographs for young fans before kick-off at the Aviva.", contributor:"David Rogers", captured:"Aviva Stadium, Dublin · 23 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-02", src:"./images/Screenshot 2026-05-28 at 15.43.01.png", caption:"England's pack drives forward, mud and rain flying in the second half.", contributor:"Naomi Baker", captured:"Allianz Stadium, Twickenham · 19 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-03", src:"./images/Screenshot 2026-05-28 at 15.43.06.png", caption:"Ireland celebrate a try, packed Aviva crowd rising to its feet.", contributor:"Charlotte Banks", captured:"Aviva Stadium, Dublin · 23 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-04", src:"./images/Screenshot 2026-05-28 at 15.43.13.png", caption:"England captain Marlie Packer looks on during the warm-up at Allianz.", contributor:"James Whitehead", captured:"Allianz Stadium, Twickenham · 19 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-05", src:"./images/Screenshot 2026-05-28 at 15.43.26.png", caption:"Captains shake hands at the coin toss, referee centre.", contributor:"Hannah Peters", captured:"Principality Stadium, Cardiff · 06 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-06", src:"./images/Screenshot 2026-05-28 at 15.43.47.png", caption:"France's Pauline Bourdon kicks for territory, late afternoon light.", contributor:"Mike Hewitt", captured:"Stade Jean-Bouin, Paris · 30 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-07", src:"./images/Screenshot 2026-05-28 at 15.43.54.png", caption:"Wales pack steadies the scrum, deep concentration before the put-in.", contributor:"David Rogers", captured:"Principality Stadium, Cardiff · 06 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-08", src:"./images/Screenshot 2026-05-28 at 15.44.03.png", caption:"Ireland teammates share a moment during pre-match laps at the Aviva.", contributor:"Naomi Baker", captured:"Aviva Stadium, Dublin · 23 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-09", src:"./images/Screenshot 2026-05-28 at 15.44.12.png", caption:"England's Abby Dow accelerates past the cover defence, eyes the line.", contributor:"Adam Pretty", captured:"Allianz Stadium, Twickenham · 19 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-10", src:"./images/Screenshot 2026-05-28 at 15.44.24.png", caption:"Scotland's Rachel Malcolm leads the team out of the tunnel.", contributor:"Stu Forster", captured:"Hive Stadium, Edinburgh · 13 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-11", src:"./images/Screenshot 2026-05-28 at 15.44.33.png", caption:"Line-out under pressure: clean lift, second-row claims the throw.", contributor:"Charlotte Banks", captured:"Stadio Lanfranchi, Parma · 30 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-12", src:"./images/Screenshot 2026-05-28 at 15.44.46.png", caption:"Italy embrace after a converted try, scrum-half mid-celebration.", contributor:"Mike Hewitt", captured:"Stadio Lanfranchi, Parma · 30 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-13", src:"./images/Screenshot 2026-05-28 at 15.44.55.png", caption:"Wales contest a maul under pressure, opposition pack driving hard.", contributor:"James Whitehead", captured:"Principality Stadium, Cardiff · 06 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-14", src:"./images/Screenshot 2026-05-28 at 15.45.04.png", caption:"France line up for the anthems, arms linked, full stadium quiet.", contributor:"Hannah Peters", captured:"Stade Jean-Bouin, Paris · 30 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-15", src:"./images/Screenshot 2026-05-28 at 15.45.31.png", caption:"England's pack regroups at the breakdown, scrum-half barking calls.", contributor:"Adam Pretty", captured:"Allianz Stadium, Twickenham · 19 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-16", src:"./images/Screenshot 2026-05-28 at 15.45.46.png", caption:"Wales fly-half breaks the line, English cover defence diving back.", contributor:"Stu Forster", captured:"Principality Stadium, Cardiff · 06 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-17", src:"./images/Screenshot 2026-05-28 at 15.45.57.png", caption:"Try celebration: arms raised, teammates sprinting in to congratulate.", contributor:"Naomi Baker", captured:"Aviva Stadium, Dublin · 23 Mar 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-18", src:"./images/Screenshot 2026-05-28 at 15.46.05.png", caption:"Players exchange jerseys at full time, supporters lingering in the stand.", contributor:"Charlotte Banks", captured:"Hive Stadium, Edinburgh · 13 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]},
+      {id:"alm-w6n-19", src:"./images/Screenshot 2026-05-28 at 15.46.10.png", caption:"Wales and England locked in the scrum, mud spraying in the contest.", contributor:"David Rogers", captured:"Principality Stadium, Cardiff · 06 Apr 2025", context:"Editorial · on-site", clearance:["Cleared for re-use","Indemnified"]}
+    ];
+
+    // =====================================================
+    // Selection of canvas rect
+    // =====================================================
+    const canvasRect = document.getElementById("canvas-rect");
+    const layerRect = document.getElementById("layer-rect");
+    const inspectorDefault = document.getElementById("inspector-default");
+    const inspectorSelected = document.getElementById("inspector-selected");
+
+    function selectRect() {
+      canvasRect.classList.add("is-selected");
+      layerRect.classList.add("is-selected");
+      inspectorDefault.classList.add("hidden");
+      inspectorSelected.classList.remove("hidden");
+    }
+    function deselectRect() {
+      canvasRect.classList.remove("is-selected");
+      layerRect.classList.remove("is-selected");
+      inspectorDefault.classList.remove("hidden");
+      inspectorSelected.classList.add("hidden");
+    }
+
+    canvasRect.addEventListener("click", e => {
+      e.stopPropagation();
+      selectRect();
+    });
+    // Deselect when clicking empty canvas
+    document.querySelector(".figma__canvas").addEventListener("click", e => {
+      if (e.target.closest(".canvas-rect")) return;
+      if (e.target.closest(".plugin")) return;
+      deselectRect();
+    });
+    // Layers click selects too
+    layerRect.addEventListener("click", e => {
+      e.stopPropagation();
+      selectRect();
+    });
+
+    // =====================================================
+    // Plugins menu
+    // =====================================================
+    const pluginsTrigger = document.getElementById("plugins-menu-trigger");
+    const pluginsMenu = document.getElementById("plugins-menu");
+
+    pluginsTrigger.addEventListener("click", e => {
+      e.stopPropagation();
+      const rect = pluginsTrigger.getBoundingClientRect();
+      pluginsMenu.style.left = rect.left + "px";
+      const open = pluginsMenu.classList.toggle("is-open");
+      pluginsTrigger.classList.toggle("is-open", open);
+    });
+
+    document.addEventListener("click", e => {
+      if (!e.target.closest("#plugins-menu") && !e.target.closest("#plugins-menu-trigger")) {
+        pluginsMenu.classList.remove("is-open");
+        pluginsTrigger.classList.remove("is-open");
+      }
+    });
+
+    // =====================================================
+    // Plugin window open/close + drag
+    // =====================================================
+    const plugin = document.getElementById("plugin");
+    const pluginHeader = document.getElementById("plugin-header");
+    const pluginClose = document.getElementById("plugin-close");
+
+    function openPlugin() {
+      plugin.classList.remove("is-hidden");
+      // Centre in the canvas area on first open
+      if (!plugin.dataset.placed) {
+        const pluginH = plugin.offsetHeight || 560;
+        const topbarH = 60; // menubar + topbar
+        const usableH = window.innerHeight - topbarH;
+        plugin.style.top = Math.max(topbarH + 12, topbarH + (usableH - pluginH) / 2) + "px";
+        plugin.style.left = (window.innerWidth/2 - 240) + "px";
+        plugin.dataset.placed = "1";
+      }
+      // Make sure the rect stays selected
+      if (!canvasRect.classList.contains("is-selected")) selectRect();
+    }
+    function closePlugin() {
+      plugin.classList.add("is-hidden");
+      // Reset to home for next open
+      setTimeout(() => goToInternal("home"), 200);
+    }
+    function goToInternal(state) {
+      currentState = state;
+      document.querySelectorAll("[data-state]").forEach(el => {
+        el.classList.toggle("hidden", el.dataset.state !== state);
+      });
+      document.getElementById("action-bar").classList.toggle("hidden", state !== "detail");
+      document.querySelectorAll(".protonav button").forEach(b => {
+        b.classList.toggle("is-active", b.dataset.go === state);
+      });
+    }
+
+    document.getElementById("open-alamy-plugin").addEventListener("click", () => {
+      pluginsMenu.classList.remove("is-open");
+      pluginsTrigger.classList.remove("is-open");
+      openPlugin();
+    });
+    pluginClose.addEventListener("click", closePlugin);
+
+    // Drag
+    let dragging = false;
+    let dragOffsetX = 0, dragOffsetY = 0;
+
+    pluginHeader.addEventListener("mousedown", e => {
+      // Ignore if clicking the close button
+      if (e.target.closest("#plugin-close")) return;
+      dragging = true;
+      pluginHeader.classList.add("is-dragging");
+      const rect = plugin.getBoundingClientRect();
+      dragOffsetX = e.clientX - rect.left;
+      dragOffsetY = e.clientY - rect.top;
+      e.preventDefault();
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      const maxX = window.innerWidth - plugin.offsetWidth;
+      const maxY = window.innerHeight - 60;
+      let x = e.clientX - dragOffsetX;
+      let y = e.clientY - dragOffsetY;
+      x = Math.max(0, Math.min(x, maxX));
+      y = Math.max(60, Math.min(y, maxY));
+      plugin.style.left = x + "px";
+      plugin.style.top = y + "px";
+    });
+    document.addEventListener("mouseup", () => {
+      if (dragging) {
+        dragging = false;
+        pluginHeader.classList.remove("is-dragging");
+      }
+    });
+
+    // =====================================================
+    // State machine inside the plugin
+    // =====================================================
+    const STATES = ["home", "results", "detail", "success"];
+    let currentState = "home";
+    let selectedResult = null;
+
+    function goTo(state) {
+      if (!STATES.includes(state)) return;
+      currentState = state;
+      // If plugin is hidden, open it so the user can see the state change
+      if (plugin.classList.contains("is-hidden")) openPlugin();
+      document.querySelectorAll("[data-state]").forEach(el => {
+        el.classList.toggle("hidden", el.dataset.state !== state);
+      });
+      document.getElementById("action-bar").classList.toggle("hidden", state !== "detail");
+      document.querySelectorAll(".protonav button").forEach(b => {
+        b.classList.toggle("is-active", b.dataset.go === state);
+      });
+      if (state === "results") renderResults();
+      if (state === "success") {
+        if (selectedResult) {
+          const imgEl = document.getElementById("canvas-rect-image");
+          imgEl.src = encodeURI(selectedResult.src);
+          canvasRect.classList.add("is-filled");
+          document.getElementById("canvas-rect-size").textContent = "Cover · 360 × 540";
+          const toast = document.getElementById("toast");
+          toast.classList.add("is-visible");
+          setTimeout(() => toast.classList.remove("is-visible"), 2400);
+        }
+      }
+    }
+    document.querySelectorAll("[data-go]").forEach(btn => {
+      btn.addEventListener("click", () => goTo(btn.dataset.go));
+    });
+
+    // Dropdown menu in search
+    const dropdownTrigger = document.getElementById("dropdown-trigger");
+    const dropdownLabel = document.getElementById("dropdown-label");
+    const dropdownIcon = document.getElementById("dropdown-icon");
+    const menu = document.getElementById("menu");
+
+    dropdownTrigger.addEventListener("click", e => {
+      e.stopPropagation();
+      const isOpen = menu.classList.toggle("is-open");
+      dropdownTrigger.setAttribute("aria-expanded", isOpen);
+    });
+    menu.querySelectorAll(".menu__item").forEach(item => {
+      item.addEventListener("click", () => {
+        menu.querySelectorAll(".menu__item").forEach(i => i.classList.remove("is-selected"));
+        item.classList.add("is-selected");
+        dropdownLabel.textContent = item.textContent.trim();
+        const iconId = item.dataset.icon;
+        dropdownIcon.innerHTML = `<use href="#${iconId}"/>`;
+        menu.classList.remove("is-open");
+        dropdownTrigger.setAttribute("aria-expanded", false);
+      });
+    });
+    document.addEventListener("click", e => {
+      if (!e.target.closest("#search-field")) {
+        menu.classList.remove("is-open");
+        dropdownTrigger.setAttribute("aria-expanded", false);
+      }
+    });
+
+    // Search input
+    const searchInput = document.getElementById("search-input");
+    const placeholders = [
+      "Dynamic women's Six Nations, action in the rain",
+      "Try celebration, packed stadium",
+      "Players locking arms during the national anthem",
+      "Scrum collapse, mud flying, opening minutes"
+    ];
+    let placeholderIdx = 0;
+    setInterval(() => {
+      placeholderIdx = (placeholderIdx + 1) % placeholders.length;
+      if (!searchInput.value) searchInput.setAttribute("placeholder", placeholders[placeholderIdx]);
+    }, 4000);
+
+    searchInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") runSearch(searchInput.value || searchInput.placeholder);
+    });
+    document.getElementById("submit-btn").addEventListener("click", () => {
+      runSearch(searchInput.value || searchInput.placeholder);
+    });
+    document.querySelectorAll(".chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const q = chip.textContent.trim();
+        searchInput.value = q;
+        runSearch(q);
+      });
+    });
+    document.querySelectorAll(".recents li").forEach(li => {
+      li.addEventListener("click", () => {
+        const q = li.querySelector("span").textContent.trim();
+        searchInput.value = q;
+        runSearch(q);
+      });
+    });
+    function runSearch(q) {
+      const text = (q || "").trim();
+      if (text) document.getElementById("results-query").textContent = `"${text}"`;
+      document.getElementById("results-count").textContent = RESULTS.length;
+      goTo("results");
+    }
+
+    const smartToggle = document.getElementById("smart-toggle");
+    const tooltipBody = document.getElementById("smart-tooltip-body");
+    const TOOLTIP_COPY = {
+      on:  "Try describing what you're looking for in your own words. Switch it off for exact keyword matching.",
+      off: "Searching by exact keyword match. Switch it on for AI-powered description search."
+    };
+    smartToggle.addEventListener("click", e => {
+      e.stopPropagation();
+      const next = smartToggle.dataset.state === "on" ? "off" : "on";
+      smartToggle.dataset.state = next;
+      const toggle = smartToggle.querySelector(".toggle");
+      toggle.dataset.state = next;
+      toggle.querySelector(".toggle__label").textContent = next.toUpperCase();
+      tooltipBody.textContent = TOOLTIP_COPY[next];
+    });
+
+    const grid = document.getElementById("results-grid");
+    function initials(name) {
+      return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+    }
+    function renderResults() {
+      grid.innerHTML = "";
+      RESULTS.forEach(r => {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "tile";
+        tile.innerHTML = `
+          <img src="${encodeURI(r.src)}" alt="${r.caption}" loading="lazy" />
+          <span class="tile__verified">Verified</span>
+          <div class="tile__provenance">
+            <div class="badges">
+              <span class="badge">Cleared</span>
+              ${r.clearance.includes("Indemnified") ? '<span class="badge badge--green">Indemnified</span>' : ""}
+            </div>
+            <div class="text-caption" style="opacity:0.92;">${r.contributor} · ${r.context}</div>
+          </div>
+        `;
+        tile.addEventListener("click", () => openDetail(r));
+        grid.appendChild(tile);
+      });
+    }
+
+    function openDetail(r) {
+      selectedResult = r;
+      // Preview the chosen image in the artboard immediately
+      const imgEl = document.getElementById("canvas-rect-image");
+      imgEl.src = encodeURI(r.src);
+      canvasRect.classList.add("is-filled");
+      document.getElementById("canvas-rect-size").textContent = "Cover · 480 × 720";
+
+      document.getElementById("detail-img").src = encodeURI(r.src);
+      document.getElementById("detail-img").alt = r.caption;
+      document.getElementById("detail-caption").textContent = r.caption;
+      document.getElementById("detail-contrib").textContent = r.contributor;
+      document.getElementById("detail-avatar").textContent = initials(r.contributor);
+      document.getElementById("detail-captured").textContent = r.captured;
+      document.getElementById("fact-context").textContent = r.context;
+      document.getElementById("fact-clearance").textContent = r.clearance.join(", ");
+      goTo("detail");
+    }
+    document.querySelectorAll(".tier").forEach(tier => {
+      tier.addEventListener("click", () => {
+        document.querySelectorAll(".tier").forEach(t => t.classList.remove("is-selected"));
+        tier.classList.add("is-selected");
+      });
+    });
+    document.getElementById("license-btn").addEventListener("click", () => goTo("success"));
+
+    // Boot — plugin closed; rect unselected
+    deselectRect();
+  </script>
+</body>
+</html>
